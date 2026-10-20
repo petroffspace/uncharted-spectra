@@ -1,0 +1,592 @@
+/* Uncharted Spectra — style.css
+   Dark cartographic theme. One accent color; muted paper-map grays elsewhere. */
+
+:root {
+  --bg: #0e1116;
+  --bg-raised: #151a22;
+  --bg-panel: #181f2a;
+  --border: #2a3341;
+  --border-strong: #3a4657;
+  --text: #d8dee9;
+  --text-dim: #7d8aa0;
+  --accent: #6d4aff;
+  --accent-hover: #8570ff;
+  --accent-ink: #ffffff;
+  --danger: #ff6b6b;
+  --scan: #3ddc97;
+  --mono: "SF Mono", "Cascadia Mono", Consolas, Menlo, monospace;
+  --sans: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  min-height: 100vh;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.mono  { font-family: var(--mono); }
+.dim   { color: var(--text-dim); }
+.hint  { color: var(--text-dim); font-size: 12.5px; margin: 4px 0 0; }
+.small { font-size: 12.5px; }
+.spacer { flex: 1 1 auto; }
+
+/* ------------------------------------------------------------- topbar ---- */
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px 10px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-raised), var(--bg));
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.brand h1::after {
+  content: "";
+  display: inline-block;
+  width: 10px; height: 10px;
+  margin-left: 10px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  transform: translateY(-1px);
+}
+
+.tagline {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.meta {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- panels --- */
+
+.panel {
+  margin: 14px 22px 0;
+  padding: 14px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.panel-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ dropzone --- */
+
+.dropzone {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 26px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.dropzone:hover, .dropzone:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(109, 74, 255, 0.08);
+}
+
+.dropzone p { margin: 0 0 2px; }
+
+.linkish {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* ----------------------------------------------------------- transport --- */
+
+.transport-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 14px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  min-width: 96px;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn.scan:not(:disabled) {
+  border-color: var(--scan);
+  color: var(--scan);
+}
+
+.btn.scan:hover:not(:disabled) {
+  background: rgba(61, 220, 151, 0.10);
+}
+
+/* scan meter strip */
+.scan-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.scan-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#scanMeter {
+  flex: 0 1 340px;
+  height: 8px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#scanMeter::-webkit-progress-bar { background: var(--bg); }
+#scanMeter::-webkit-progress-value { background: var(--scan); }
+#scanMeter::-moz-progress-bar     { background: var(--scan); }
+
+#scanScore { color: var(--scan); font-size: 13px; min-width: 3.4em; }
+#scanStats { font-size: 12px; }
+
+/* --------------------------------------------------------------- views --- */
+
+.views {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 14px 22px 0;
+}
+
+@media (max-width: 900px) {
+  .views { grid-template-columns: 1fr; }
+}
+
+.view-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 240px;
+}
+
+.view-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.view-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  min-height: 200px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(255,255,255,0.02) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(255,255,255,0.02) 31px 32px),
+    var(--bg);
+}
+
+#waveCanvas {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  display: block;
+  cursor: crosshair; /* SCRUBBABLE — drag to seek */
+}
+
+#imageView {
+  max-width: 100%;
+  max-height: 320px;
+  image-rendering: pixelated; /* PCM noise is data, not photography */
+  border: 1px solid var(--border);
+}
+
+#imageView.hidden-view {
+  display: none;
+}
+
+.empty-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-style: italic;
+  pointer-events: none;
+}
+
+.empty-note.small {
+  position: static;
+  display: block;
+  font-style: normal;
+}
+
+/* ------------------------------------------------------------- rotaries -- */
+
+.rotary-row {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.rotary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 150px;
+  user-select: none;
+}
+
+.knob {
+  --angle: 0deg;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #232c3a, #141922 70%);
+  border: 2px solid var(--border-strong);
+  cursor: grab;
+  position: relative;
+  touch-action: none; /* drag handled by JS */
+}
+
+.knob:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.knob:active { cursor: grabbing; }
+
+/* pointer/indicator line */
+.knob::before {
+  content: "";
+  position: absolute;
+  top: 6px; left: 50%;
+  width: 4px; height: 20px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: 50% 32px; /* pivot at knob center */
+  transform: rotate(var(--angle));
+  box-shadow: 0 0 6px rgba(109, 74, 255, 0.5);
+}
+
+/* subtle tick ring */
+.knob::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px dotted var(--border);
+  pointer-events: none;
+}
+
+.rotary-name {
+  margin-top: 10px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.rotary-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.rotary-value input[type="number"] {
+  width: 72px;
+  padding: 3px 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: right;
+}
+
+.rotary-value input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.rotary-value .unit {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rotary-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 4px 0 0;
+}
+
+.rotary-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+/* -------------------------------------------------------------- modules -- */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 5px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.module-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.module-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color .12s ease;
+}
+
+.module-card:hover { border-color: var(--accent); }
+
+.module-card h4 { margin: 0 0 2px; font-size: 14px; }
+.module-card p  { margin: 0; font-size: 12px; color: var(--text-dim); }
+
+/* ---------------------------------------------------------------- modal -- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-backdrop[hidden] { display: none; }
+
+.modal {
+  width: min(480px, calc(100vw - 40px));
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-head h3 { margin: 0; font-size: 16px; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.icon-btn:hover { color: var(--text); }
+
+.modal-body { padding: 14px 18px; }
+
+.param-row {
+  margin-bottom: 14px;
+}
+
+.param-row label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.param-row .param-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent-hover);
+}
+
+.param-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.param-row select,
+.param-row input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------ statusbar -- */
+
+.statusbar {
+  margin-top: auto;
+  padding: 6px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------- PHASE 9.1: scanner --- */
+
+/* Scan button pulse while actively scanning */
+.btn.scan.scanning:not(:disabled) {
+  animation: scan-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { background: rgba(61, 220, 151, 0.10); }
+  50%      { background: rgba(61, 220, 151, 0.30); }
+}
+
+/* Smooth the structure-index meter movement between polls */
+#scanMeter {
+  transition: none; /* <progress> fill can't transition, but score text does */
+}
+
+#scanScore, #scanStats {
+  transition: color .3s ease;
+}
+
+/* Score readout turns green-accented once a finding is being held */
+#scanScore.has-finding {
+  color: var(--scan);
+  font-weight: 600;
+}
+
+#scanSource {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+  max-width: 220px;
+}

@@ -1,0 +1,226 @@
+# Uncharted Spectra — Hand-off Document
+
+**Project:** Uncharted Spectra — image ⇄ sound dual-projection instrument
+**Document date:** 2026-10-20
+**Status:** Functionally complete through Phase 10.3 (performance pass, WAV/BMP export, JSON preset save/load, PWA shell, and 100% self-contained binaries).
+
+---
+
+## 1. Project Concept
+
+Uncharted Spectra is a Go web application that treats the boundary between audio and image as a single mutable data space. A WAV file and a BMP file are **lossless, bidirectional projections of the same raw PCM byte buffer**. One canonical state (`PCMState`) is the source of truth; WAV and BMP are rendered *views* of it.
+
+The instrument's core idea is **domain-inverted filtering**: audio-style DSP (gain, filters, distortion, delay, reverb, bitcrush) operates on the *image* buffer, while photo-style adjustments (brightness, contrast, levels, blur, fill) operate on the *audio* stream. Applying a filter from one domain to the other produces unplanned, frequently musical artifacts — e.g., the bandpass filter accidentally produces sawtooth-like tones in audio.
+
+An **entropy scanner** hunts `/dev/urandom` (or user-supplied sources) for segments showing non-noise structure, scored by a structure index; findings can be committed to state as one undoable mutation.
+
+---
+
+## 2. Architecture Overview
+
+```
+upload (WAV/BMP)
+      │
+      ▼
+┌─────────────┐     clone-per-apply (fail-safe)
+│  Session     │  base ← history[] ← current (PCMState)
+└─────────────┘
+      │
+      ▼  module registry (init() self-registration)
+mutation pipeline: /api/module/apply → applyModuleLocked()
+      - resolve module, merge param defaults
+      - apply to a CLONE; commit only on success
+      - one undo step per apply
+      ▼
+rendered views:
+  GET /audio/current.wav  (pcmToWAV)
+  GET /image/current.bmp  (pcmToBMP, metadata smuggled in header)
+  GET /api/state          (peaks, dims, undo availability)
+```
+
+**Key invariant — lossless round-trip:** all frame math (`frames.go`) preserves exact byte length; `frame_probe` tool verifies this on demand. Every mutation is recoverable: one undo step per apply; full revert to upload state always available.
+
+**Key invariants — module contracts:**
+- `mix = 0` (or equivalent neutral config) must be a **byte-identical no-op** (the "null contract", instituted after the reverb v2 incident — see §8).
+- Parameters clamped server-side; user error (e.g., `in_lo > in_hi`) tolerated.
+- One apply = one undo step.
+
+**Concurrency model:** single session guarded by `sess.mu`; module registry by `modulesMu`; scan manager by its own mutex; scan sources immutable after creation so hot-swapping is a pointer change. Scanner is session-independent (runs with nothing uploaded).
+
+---
+
+## 3. Repository Layout
+
+```
+/
+├── main.go          core server: session, WAV/BMP codecs, endpoints,
+│                    module registry, applyModuleLocked, scan HTTP handlers
+├── rotary.go        terrain_apply (shift X/Y, randomize), shared entropy
+│                    source randomBytes() (/dev/urandom + crypto fallback)
+├── frames.go       SpatialFrame / TemporalFrame, applySpatial/applyTemporal,
+│                    frame_probe tool
+├── dsp_gain.go     spatial_gain
+├── dsp_filter.go   spatial_filter   (low/high/band, separable gaussian)
+├── dsp_distortion.go spatial_distortion (clip/tanh/foldback/posterize)
+├── dsp_delay.go    spatial_delay    (multi-tap, 3 directions)
+├── dsp_reverb.go   spatial_reverb v2 (comb/allpass, instrumented — see §8)
+├── dsp_bitcrush.go spatial_bitcrush (sample-hold decimation + quantize)
+├── img_adjust.go   temporal_adjust  (brightness/contrast/levels gate)
+├── img_blur.go     temporal_blur    (3-pass box gaussian, O(n))
+├── img_fill.go     temporal_fill    (region / salt entropy injection)
+├── scan.go         scanner: structure index (FFT flatness + autocorr +
+│                    peakiness), ScanSource interface, sources registry,
+│                    scan_keep hidden module
+└── web/
+    ├── index.html  UI: dropzone, transport, views, scan strip (meter,
+    │                source picker, ＋source), rotaries, module tabs, modal
+    ├── style.css   dark cartographic theme; scanner additions appended
+    └── app.js      all client logic (see §6)
+```
+
+**Build & run:**
+```bash
+go build -o uncharted-spectra .
+./uncharted-spectra      # listens on http://127.0.0.1:8484
+```
+Requires Go ≥ 1.22 (method-pattern routing: `mux.HandleFunc("POST /api/...", ...)`). Web assets are embedded directly into the binary via `//go:embed all:web` (100% self-contained).
+
+---
+
+## 4. HTTP API Reference
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/upload` | multipart `file` (WAV or BMP, ≤ `maxUpload`); establishes session |
+| GET | `/api/state` | metadata, BMP dims, waveform peaks (1600 buckets), `canUndo` |
+| GET | `/audio/current.wav` | current state as WAV |
+| GET | `/image/current.bmp` | current state as BMP |
+| POST | `/api/undo` | pop history |
+| POST | `/api/revert` | restore upload state, clear history |
+| GET | `/api/modules` | registered modules (hidden modules excluded) |
+| POST | `/api/module/apply` | `{module, params}` — defaults merged; params not in spec ignored |
+| POST | `/api/scan/start` | begin/resume scanning |
+| POST | `/api/scan/stop` | halt; finding + stats retained |
+| GET | `/api/scan/status` | `{running, segments, best_score, has_finding, elapsed_ms, segment_samples, source, source_name}` |
+| POST | `/api/scan/keep` | apply best finding as one undoable mutation; 409 if no finding |
+| GET | `/api/scan/sources` | list sources (incl. `state` when a session exists) |
+| POST | `/api/scan/sources` | upload new source file (multipart; auto-selected) |
+| POST | `/api/scan/source/select` | `{source: id}` — hot-swap active source |
+| GET | `/api/export/wav` | download current state as WAV (`Content-Disposition: attachment`) |
+| GET | `/api/export/bmp` | download current state as BMP (`Content-Disposition: attachment`) |
+| GET | `/api/preset` | export current effect chain as JSON (`?download=1` for attachment) |
+| POST | `/api/preset/apply` | `{steps: [{module, params}]}` — apply effect chain atomically |
+| GET | `/` etc. | embedded static files from `web/` (incl. PWA `manifest.json` & `sw.js`) |
+
+**Status codes of note:** 409 — keep with no finding / `state` source with nothing loaded; 404 — unknown module/source; 500 — apply error (session untouched — apply happens on a clone).
+
+---
+
+## 5. Module Registry (complete)
+
+Category `"sound"` = **Spatial** tab (audio-DSP algorithms operating on image planes). Category `"image"` = **Temporal** tab (photo algorithms operating on the sample stream). Category `"tool"` = Tools tab (except `scan_keep`, hidden).
+
+| Name | Cat | Params | Notes |
+|------|-----|--------|-------|
+| `spatial_gain` | sound | gain dB, mix | first domain-swap demonstration |
+| `spatial_filter` | sound | type 0/1/2, radius 1–25, mix | separable gaussian; bandpass ≈ DoG; *produces accidental sawtooth audio* |
+| `spatial_distortion` | sound | type (clip/tanh/fold/posterize), drive, levels, makeup, mix | signed-pivot remap around 0.5; foldback is the violent one |
+| `spatial_delay` | sound | direction (raster/horiz/vert), distance 1–256, feedback ≤0.95, taps 1–32, mix | FIR only; raster offset = exact PCM byte offset |
+| `spatial_reverb` | sound | size, damp, wet, gain | **v2**, Freeverb-style, logging enabled (see §8) |
+| `spatial_bitcrush` | sound | rate 1–64, bits 1–8, mix | sample-and-hold; `rate 1, bits 8, mix 100` ≈ identity |
+| `temporal_adjust` | image | brightness, contrast, pivot, in_lo/in_hi, out_lo/out_hi, mix | levels = hard gate on audio |
+| `temporal_blur` | image | radius 1–16384 (samples), mix | 3× box-blur gaussian approximation, O(n) |
+| `temporal_fill` | image | mode (region/salt), start/end, density, match, mix | phase-coherent region noise; decorrelated salt |
+| `terrain_apply` | tool | shift_x_px, shift_y_px, randomize_pct | driven by the rotary commit button |
+| `frame_probe` | tool | — | verifies lossless round-trip, reports `both exact` |
+| `scan_keep` | tool (hidden) | — | internal; invoked via `/api/scan/keep` |
+
+Adding a module: create file with `RegisterModule(&Module{...})` in `init()`; frontend discovers it via `/api/modules` automatically.
+
+---
+
+## 6. Frontend Notes (`web/app.js`)
+
+Structure: `els` DOM map (defensive `$()` — missing elements tolerated), upload/blob-URL handling, `/api/state` refresh + render, waveform canvas with playhead and **pointer-based scrubbing**, HTMLAudio playback with position preservation across mutations, rotary knobs (drag/wheel/keyboard/numeric; **live local BMP preview** on uncommitted values, commit sends one `terrain_apply`), module tabs + parameter modal, scanner polling at 250 ms.
+
+Cross-file gotchas:
+- `renderState` is monkey-patched late (`const _origRender = renderState; renderState = ...`) to invalidate the local preview buffer after state changes. Preserve this wrapping when editing.
+- `api()` attaches `err.status` to thrown errors — the 409 handling in Keep depends on it.
+- `stateMutatedSinceUpload` decides whether the image box shows the original BMP blob URL or the server-rendered current BMP.
+- Scanner poll loop stops itself on 404 (graceful degradation with older servers).
+- BMP format assumptions in the local preview: 24-bit, no row padding, pixel data at offset 54 — matches `pcmToBMP` output.
+
+---
+
+## 7. Scanner Details
+
+**Structure index (0–100):** `100 × (0.45·(1−flatness) + 0.35·repetition + 0.20·peakiness)`
+- flatness: geometric/arithmetic mean ratio of Hann-windowed 4096-pt FFT power spectrum
+- repetition: peak normalized autocorrelation, lags 32–1024 step 16, saturated at 0.4
+- peakiness: max bin / mean / 50, saturated
+
+**Calibrated readings:** pure `/dev/urandom` ≈ **1–6** (honest, expected); a sine tone ≈ **45–65**; music generally 30–70. Segment size: 16384 samples (32 KB).
+
+**Sources (Phase 10.0):** `urandom` (default), `state` (frozen snapshot at selection), `file-N` (uploaded WAV/BMP/raw, segments at uniform random offsets, wrap-tiled if short). Sources are hot-swappable mid-scan. Best-so-far persists across source swaps by design. Keep clears the finding and resets the score for the next hunt.
+
+**Keep semantics:** finding is tiled across all channels (phase-coherent), applied through the standard module pipeline (clone + one undo step).
+
+---
+
+## 8. Known Issues & Institutional Lessons
+
+1. **Reverb v1 failure (resolved, historically instructive):** initial `dsp_reverb.go` had two unit bugs — damping used as a raw 0–255 integer multiplied into a coefficient, and allpass mix ran at 60–100 instead of ~0.5. Result: values exploded and clamped → pure-black image + dead-flat waveform at *every* parameter setting. Fixed in **v2**: unitless coefficients, circular-buffer combs with feedback < 1, unity-gain allpasses, plane-mean removal/restoration (comb DC gain is 1/(1−fb)), wet-path hard clamp. **v2 also ships instrumentation**: per-plane min/max/mean logging (`reverb v2: plane …`) and the label carries a `v2` suffix for build verification. The debugging episode revealed stale-build hazards (orphaned `go run` binaries, browser-cached `/api/modules`, unsaved editor buffers) — hence the version-marker + log-line pattern, now recommended for any future DSP module that misbehaves.
+2. **Null contract** (from the same incident): every module must make `mix 0` a byte-identical no-op, and neutral-config identities must be identified in module docs. Test these before shipping any new DSP.
+3. **Scanner plateau on urandom is expected** — the meter is honest, not broken.
+4. **Upload ceiling / memory (Phase 10.1, deferred):** `maxUpload = 100 MB`; at large files the binding constraints are undo history (`maxHistory = 50` full-state clones!), float64 spatial planes (3× ~560 MB arrays at 200 MB PCM for the filter module), full-frame `computePeaks`, and browser BMP decode. The plan for 10.1: float32 planes, sampled peaks, raised cap + reduced history depth.
+
+---
+
+## 9. Testing Playbook (regression suite)
+
+Run after any change, in order:
+
+1. **Boot:** all modules registered (10 effects + `terrain_apply`, `frame_probe`, `scan_keep`), listens on 8484.
+2. **Upload WAV** → both views render; scrub waveform; play/stop rewinds to start.
+3. **Upload BMP** → original image shown, audio playable.
+4. **Terrain:** knobs preview live (per-row entropy — no stripe bug); commit = one undo; undo restores exactly.
+5. **Null tests per module:** `mix 0` (all 9 mixable modules), `rate 1/bits 8` (bitcrush), `brightness 0/contrast 1/levels [0,1]→[0,1]` (adjust), `start=end` region fill, `density 0` salt.
+6. **Signature effects:** filter bandpass ≈ ring textures + sawtooth-ish audio; foldback drive 6; delay raster 16 ≈ comb flutter; reverb size 0.9 damp 0.2 ≈ cathedral; bitcrush rate 16 ≈ telephone; adjust levels gate `in_lo 0.05`; blur radius 8192 ≈ envelope drone; fill salt 0.95 ≈ tape chew.
+7. **Frame Probe** reports `both exact` after arbitrary chains.
+8. **Undo chain:** apply several, undo repeatedly, revert-to-base.
+9. **Scanner curl round-trip:** start → status (sanity ranges per §7) → keep (state changes, one undo) → keep again (409) → stop. Hot-swap sources mid-scan; upload music WAV as source and observe meter climbing to 30–70.
+10. **Concurrent:** scan running while uploading/applying modules — no deadlock.
+
+---
+
+## 10. Completed Roadmap (Phases 10.1–10.3)
+
+| # | Item | Status & Implementation Notes |
+|:-:|------|-------------------------------|
+| 10.1 | **Performance pass** | **Complete:** `float32` spatial planes in `frames.go` and all `dsp_*.go`; sampled `computePeaks` (`maxSamplesInBucket = 256`); raised `maxUpload` to `256 MB` and lowered `maxHistory` to `6`. |
+| 10.2 | **Export/import** | **Complete:** WAV/BMP download endpoints (`/api/export/wav`, `/api/export/bmp`) with `Content-Disposition: attachment`; effect chain preset export (`GET /api/preset`) and atomic import (`POST /api/preset/apply`) with full undo/revert synchronization. |
+| 10.3 | **PWA / Self-contained** | **Complete:** Web App Manifest (`web/manifest.json`), offline-capable Service Worker (`web/sw.js`), `//go:embed all:web` single-binary packaging, and Raspberry Pi 5 (`linux/arm64`) cross-compilation in `rpi5/uncharted-spectra`. |
+
+Other ideas noted for future exploration: inverting fill's channel-correlation defaults (currently coherent-region/decorrelated-salt) as a user option; scan sources from mic input; scan-segment size as a parameter; external LADSPA plugin hosting.
+
+---
+
+## 11. Quick Command Reference
+
+```bash
+go build -o uncharted-spectra . && ./uncharted-spectra
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o rpi5/uncharted-spectra .
+
+curl -s http://127.0.0.1:8484/api/modules | python3 -m json.tool
+curl -X POST http://127.0.0.1:8484/api/scan/start
+curl -s http://127.0.0.1:8484/api/scan/status
+curl -X POST http://127.0.0.1:8484/api/scan/keep
+curl -X POST http://127.0.0.1:8484/api/scan/stop
+ss -ltnp | grep 8484        # orphaned process check
+```
+
+Default constants: `listenAddr 127.0.0.1:8484`, `maxUpload 256 MB`, `maxHistory 6`, `peakBuckets 1600`, `maxSamplesInBucket 256`, scan segment 16384 samples, FFT 4096, scan pause 3 ms.
+
+---
+
+*End of document. The instrument is yours — happy exploring.*

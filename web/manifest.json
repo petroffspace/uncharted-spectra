@@ -1,0 +1,16 @@
+{
+  "name": "Uncharted Spectra",
+  "short_name": "Uncharted Spectra",
+  "description": "Uncharted Spectra — sailing the chaos, seeking treasures (image ⇄ sound dual-projection instrument)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1116",
+  "theme_color": "#6d4aff",
+  "icons": [
+    {
+      "src": "/title_card.jpg",
+      "sizes": "1024x576",
+      "type": "image/jpeg"
+    }
+  ]
+}

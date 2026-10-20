@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uncharted Spectra</title>
+<meta name="theme-color" content="#0e1116">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>Uncharted Spectra</h1>
+    <span class="tagline">sailing the chaos, seeking treasures — image ⇄ sound</span>
+  </div>
+  <div class="meta" id="metaLine">no signal loaded</div>
+</header>
+
+<!-- ---------------------------------------------------------------- upload -->
+<section class="panel upload-panel">
+  <div id="dropZone" class="dropzone">
+    <input type="file" id="fileInput" accept=".wav,.bmp,audio/wav,image/bmp" hidden>
+    <p><strong>Drop a .wav or .bmp here</strong> — or <button type="button" id="browseBtn" class="linkish">browse</button></p>
+    <p class="hint">WAV in → waveform + generated image. BMP in → recovered audio + original image.</p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- transport -->
+<section class="panel transport-panel">
+  <div class="transport-row">
+    <button type="button" id="playBtn" class="btn primary" disabled>▶ Play</button>
+    <button type="button" id="btnUndo" class="btn" disabled>↶ Undo</button>
+    <button type="button" id="btnRevert" class="btn" disabled>⟲ Revert to base</button>
+    <button type="button" id="btnExportWav" class="btn" disabled title="Download current audio as WAV">⬇ WAV</button>
+    <button type="button" id="btnExportBmp" class="btn" disabled title="Download current image as BMP">⬇ BMP</button>
+    <button type="button" id="btnPresetSave" class="btn" disabled title="Export effect chain as JSON preset">⬇ Preset</button>
+    <input type="file" id="presetFile" accept=".json,application/json" hidden>
+    <button type="button" id="btnPresetLoad" class="btn" disabled title="Import and apply JSON preset">⬆ Preset</button>
+
+    <span class="spacer"></span>
+
+    <button type="button" id="btnScan" class="btn scan" disabled>◎ Scan</button>
+    <button type="button" id="btnScanKeep" class="btn" disabled>Keep finding</button>
+    <button type="button" id="btnScanStop" class="btn" disabled>■ Stop scan</button>
+  </div>
+
+  <div class="scan-strip">
+    <label class="scan-label" for="scanMeter">structure index</label>
+    <progress id="scanMeter" value="0" max="1"></progress>
+    <span id="scanScore" class="mono">0.000</span>
+    <span id="scanStats" class="mono dim">scanned 0 B · best @ —</span>
+    <select id="scanSource" title="scan source"></select>
+    <input type="file" id="scanSourceFile" accept=".wav,.bmp" hidden>
+    <button type="button" id="btnScanSourceAdd" class="btn">＋ source</button>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------------- views -->
+<section class="views">
+
+  <div class="view-box" id="waveBox">
+    <div class="view-head">
+      <span>waveform</span>
+      <span class="mono dim" id="waveInfo">—</span>
+    </div>
+    <div class="view-body">
+      <canvas id="waveCanvas" width="800" height="400"></canvas>
+      <div class="empty-note" id="waveEmpty">awaiting signal</div>
+    </div>
+  </div>
+
+  <div class="view-box" id="imageBox">
+    <div class="view-head">
+      <span>image</span>
+      <span class="mono dim" id="imageInfo">—</span>
+    </div>
+    <div class="view-body">
+      <!-- src is swapped by app.js: object URL for a fresh BMP upload,
+           /image/current.bmp (cache-busted) after any mutation. -->
+      <img id="imageView" alt="current state as bitmap" draggable="false">
+      <div class="empty-note" id="imageEmpty">awaiting signal</div>
+    </div>
+  </div>
+
+</section>
+
+<!-- --------------------------------------------------------------- rotaries -->
+<section class="panel rotary-panel">
+  <h2 class="panel-title">terrain controls</h2>
+  <div class="rotary-row">
+
+    <div class="rotary" id="rotaryShiftX" data-module="shift_x">
+      <div class="knob" role="slider" tabindex="0"
+           aria-label="shift left right" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"></div>
+      <div class="rotary-name">shift ⇄</div>
+      <div class="rotary-value">
+        <input type="number" data-input-for="shift_x" min="-300" max="300" step="1" value="0" aria-label="horizontal shift value">
+        <span class="unit">px</span>
+      </div>
+      <p class="rotary-hint">inserts fresh entropy as a column</p>
+    </div>
+
+    <div class="rotary" id="rotaryShiftY" data-module="shift_y">
+      <div class="knob" role="slider" tabindex="0"
+           aria-label="shift up down" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"></div>
+      <div class="rotary-name">shift ⇅</div>
+      <div class="rotary-value">
+        <input type="number" data-input-for="shift_y" min="-300" max="300" step="1" value="0" aria-label="vertical shift value">
+        <span class="unit">px</span>
+      </div>
+      <p class="rotary-hint">inserts fresh entropy as a row</p>
+    </div>
+
+    <div class="rotary" id="rotaryRandomize" data-module="randomize">
+      <div class="knob" role="slider" tabindex="0"
+           aria-label="randomize amount" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      <div class="rotary-name">randomize</div>
+      <div class="rotary-value">
+        <input type="number" data-input-for="randomize" min="0" max="100" step="1" value="0" aria-label="randomize value">
+        <span class="unit">%</span>
+      </div>
+      <p class="rotary-hint">replaces pixels with entropy</p>
+    </div>
+
+  </div>
+  <div class="rotary-actions">
+    <button type="button" id="btnCommitRotary" class="btn" disabled>Commit to state</button>
+    <span class="hint">knobs preview live; commit pushes one undo step · scroll wheel or drag knob · type value to set</span>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- modules -->
+<section class="panel modules-panel">
+  <h2 class="panel-title">modules</h2>
+  <p class="hint" style="font-size:10px;margin-top:4px;"><strong>Note:</strong> "Spatial" filters operate on the image buffer. "Temporal" filters operate on the audio buffer.</p>
+
+  <nav class="tabs" id="moduleTabs">
+    <button type="button" class="tab active" data-cat="sound">spatial</button>
+    <button type="button" class="tab" data-cat="image">temporal</button>
+    <button type="button" class="tab" data-cat="tool">tools</button>
+  </nav>
+
+  <div class="module-list" id="moduleList">
+    <div class="empty-note small">loading modules…</div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ modal -->
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h3 id="modalTitle">filter</h3>
+      <button type="button" id="modalClose" class="icon-btn" aria-label="close">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button type="button" id="modalCancel" class="btn">Cancel</button>
+      <button type="button" id="modalApply" class="btn primary">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ----------------------------------------------------------------- status -->
+<footer class="statusbar">
+  <span id="statusLine" class="mono">ready</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
