@@ -44,9 +44,3 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o rpi5/uncharted-spectra .
 # Run test suite
 go test -v .
 ```
-
----
-
-## Documentation
-* [idea.txt](idea.txt) — Original concept specification
-* [hand-off.txt](hand-off.txt) — Architecture, API reference, module contracts, and engineering notes
